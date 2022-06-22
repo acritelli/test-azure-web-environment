@@ -1,0 +1,62 @@
+{
+  "aws": {
+    "DEV": {
+      "flavor": {
+        "instance_type": "t2.micro"
+      },
+      "message": "Development on AWS - Managed by Cloudify!"
+    },
+    "QA": {
+      "flavor": {
+        "instance_type": "t2.medium"
+      },
+      "message": "QA on AWS - Managed by Cloudify!"
+    },
+    "PRODUCTION": {
+      "flavor": {
+        "instance_type": "t2.large"
+      },
+      "message": "Production on AWS - Managed by Cloudify!"
+    }
+  },
+  "google": {
+    "DEV": {
+      "flavor": {
+        "instance_type": "n1-standard-2"
+      },
+      "message": "Development on GCP - Managed by Cloudify!"
+    },
+    "QA": {
+      "flavor": {
+        "instance_type": "n1-standard-4"
+      },
+      "message": "QA on GCP - Managed by Cloudify!"
+    },
+    "PRODUCTION": {
+      "flavor": {
+        "instance_type": "n1-standard-8"
+      },
+      "message": "Production on GCP - Managed by Cloudify!"
+    }
+  },
+  "azure": {
+    "DEV": {
+      "flavor": {
+        "instance_type": "Standard_B1s"
+      },
+      "message": "Development on Azure - Managed by Cloudify!"
+    },
+    "QA": {
+      "flavor": {
+        "instance_type": "Standard_B2s"
+      },
+      "message": "QA on Azure - Managed by Cloudify!"
+    },
+    "PRODUCTION": {
+      "flavor": {
+        "instance_type": "Standard_B4ms"
+      },
+      "message": "Production on Azure - Managed by Cloudify!"
+    }
+  }
+}

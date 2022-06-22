@@ -1,0 +1,48 @@
+tosca_definitions_version: cloudify_dsl_1_3
+
+description: >
+  This blueprint deploys NGINX on a Kubernetes cluster.
+
+imports:
+  - https://getcloudify.org/spec/cloudify/6.3.0/types.yaml
+  - plugin:cloudify-kubernetes-plugin?version= >=2.7.0
+
+inputs:
+
+  kubernetes_api_endpoint:
+    type: string
+    display_label: Kubernetes API Endpoint
+    description: Endpoint address for Kubernetes API server
+    default: https://akstesta-d3a37abc.hcp.eastus2.azmk8s.io/
+
+  kubernetes_token:
+    type: string
+    display_label: Kubernetes Token
+    description: Service account token for Kubernetes cluster
+    default: eyJhbGciOiJSUzI1NiIsImtpZCI6Ii1yOFdaVmhjUWg0NGhxUjBVOVIwQ3VsTHFCQnhsTHEwR2Fac3ZiSGxOQ2MifQ.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJkZWZhdWx0Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9zZWNyZXQubmFtZSI6ImV4YW1wbGVzLXVzZXItdG9rZW4tbTIycTgiLCJrdWJlcm5ldGVzLmlvL3NlcnZpY2VhY2NvdW50L3NlcnZpY2UtYWNjb3VudC5uYW1lIjoiZXhhbXBsZXMtdXNlciIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VydmljZS1hY2NvdW50LnVpZCI6IjgyYzg5NDkxLTU2MDUtNGM2Yi1hMzZhLTNiNzExZGNhZjU1OSIsInN1YiI6InN5c3RlbTpzZXJ2aWNlYWNjb3VudDpkZWZhdWx0OmV4YW1wbGVzLXVzZXIifQ.tZNkb6-D1sfiZg3i0lEhMLa1_gynzzahlcWJm83_fiRdKiFa6lJS6nUc5JKTnQzbmQrx-l8jbFm-Nd5a3L1GkOQ-PieoNj5ewpgGZABH3aWoQI96P8fwLsgMzzjhhgqR29pqWAwRCngU5iyBWOwSuNQrgvIBu1vQyriLV-ufM_K2Kv-VAE6c84sYrV_7ta7NgBSU318jynWbHSe7sKWQO9LgP2OoTMKHSilmYerIVOeHZku5KxcZJKRPw6hOJ36ecgeANc_NWKv3RRGpkE1EVZnkIyX-nwGmNbvSToj1z05b7HQuXPrH_-fEWTCl9_9WH_ytMVB_8qv2PiBivnPqQAxTVB5lH4BZ9qj8I8Idw5QzCVdgukOHCpzPptXa0OZ4OBNwBH8yOqPPdHgIXU1W4_j68fLrLrZF9taXkcmaAXAZHH6YeKJDmMhOC1gqnMFA1vHABN9Xqqbu3M2_plDm6Buuf3MSliLdf8BctW95eHuh41BJ_RZL6JPRKdRvaYwnwlJiPRK4KKY1M_R3x_ry7PP7QcrLnEsVtE_DBHby6dhW_kgu4iPGkfALHOns84V3PaejfATGNM4NwC_1A3sUJsR-T00El9A58vjuVm1L8jzpXeoDeOZzX964hEnWsOMXVOVMVyZzR2FGh5S50JC_BcBAmV6pH9PjHzLjdBjRGTI
+
+dsl_definitions:
+
+  kubernetes_client_config: &kubernetes_client_config
+    configuration:
+      api_options:
+        host: { get_input: kubernetes_api_endpoint }
+        api_key: { get_secret: kubernetes_token }
+        debug: false
+        verify_ssl: false
+
+node_templates:
+
+  nginx:
+    type: cloudify.kubernetes.resources.FileDefinedResource
+    properties:
+      client_config: *kubernetes_client_config
+      validate_resource_status: true
+      file:
+        resource_path: kubernetes/nginx.yaml
+
+outputs:
+
+  endpoint:
+    description: NGINX load balancer endpoint
+    value: { get_attribute: [ nginx, kubernetes, "kubernetes/nginx.yaml#1", status, load_balancer, ingress, 0, ip ] }

@@ -1,0 +1,192 @@
+tosca_definitions_version: cloudify_dsl_1_3
+
+description: >
+  This blueprint deploys NGINX on Azure using Terraform.
+
+imports:
+  - http://cloudify.co/spec/cloudify/6.3.0/types.yaml
+  - plugin:cloudify-terraform-plugin
+  - plugin:cloudify-ansible-plugin
+  - plugin:cloudify-utilities-plugin?version= >=1.22.1
+
+inputs:
+  azure_region_name:
+    type: string
+    description: Azure Region to deploy resources into
+    display_label: Azure region name
+    default: eastus2
+    constraints:
+      - valid_values:
+          - centralus
+          - eastus
+          - eastus2
+          - westus
+          - westus2
+          - northeurope
+          - westeurope
+
+  prefix:
+    type: string
+    description: A prefix to add to names of deployed resources
+    display_label: Resource Prefix
+    default: cfy
+
+  nginx_port:
+    description: The port that NGINX will run on
+    display_label: NGINX Port
+    type: integer
+    default: 80
+    constraints:
+      - valid_values:
+          - 80
+          - 8080
+
+  env_type:
+    description: The environment's type to create
+    display_label: Environment type
+    type: string
+    constraints:
+      - valid_values:
+          - DEV
+          - QA
+          - PRODUCTION
+
+  vm_count:
+     description: "Number of VMs"
+     type: integer
+     display_label: Number of VMs
+     constraints:
+       - valid_values:
+         - 1
+         - 2
+         - 3
+
+node_templates:
+
+  terraform:
+    type: cloudify.nodes.terraform
+
+  network:
+    type: cloudify.nodes.terraform.Module
+    properties:
+      resource_config:
+        source:
+          location: terraform/azure-network.zip
+        source_path: network/
+        variables:
+          region: { get_input: azure_region_name }
+          prefix: { get_input: prefix }
+          client_id: { get_secret: azure_client_id }
+          client_secret: { get_secret: azure_client_secret }
+          subscription_id: { get_secret: azure_subscription_id }
+          tenant_id: { get_secret: azure_tenant_id }
+    relationships:
+      - type: cloudify.terraform.relationships.run_on_host
+        target: terraform
+
+  vm:
+    type: cloudify.nodes.terraform.Module
+    properties:
+      resource_config:
+        source:
+          location: terraform/azure-vm.zip
+        source_path: vm/
+        variables:
+          resource_group_name: { get_attribute: [network, outputs, resource_group_name, value] }
+          location: { get_attribute: [network, outputs, location, value] }
+          subnet: { get_attribute: [network, outputs, subnet, value] }
+          prefix: { get_input: prefix }
+          admin_user: centos
+          admin_key_public: { get_attribute: [agent_key, public_key_export] }
+          instance_type: { get_secret: [ eaas_params, azure, { get_input: env_type }, flavor, instance_type ] }
+          client_id: { get_secret: azure_client_id }
+          client_secret: { get_secret: azure_client_secret }
+          subscription_id: { get_secret: azure_subscription_id }
+          tenant_id: { get_secret: azure_tenant_id }
+    relationships:
+      - type: cloudify.terraform.relationships.run_on_host
+        target: terraform
+      - type: cloudify.relationships.connected_to
+        target: network
+      - target: agent_key
+        type: cloudify.relationships.depends_on
+
+  ansible_playbook:
+    type: cloudify.nodes.ansible.Executor
+    properties:
+      playbook_path: playbooks/site.yaml
+      run_data:
+        port: { get_input: nginx_port }
+        message: { get_secret: [ eaas_params, azure, { get_input: env_type }, message ] }
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        start:
+          implementation: ansible.cloudify_ansible.tasks.run
+          inputs:
+            playbook_path: playbooks/site.yaml
+            sources: { get_attribute: [ SELF, sources ] }
+        delete:
+          implementation: ansible.cloudify_ansible.tasks.cleanup
+    relationships:
+      - type: cloudify.ansible.relationships.connected_to_host
+        target: vm
+        source_interfaces:
+          cloudify.interfaces.relationship_lifecycle:
+            preconfigure:
+              implementation: ansible.cloudify_ansible.tasks.ansible_requires_host
+              inputs:
+                group_name: webserver
+                hostname: nginx
+                host_config:
+                       ansible_host: { get_attribute: [ vm, outputs, ip, value] }
+                       ansible_user: centos
+                       ansible_ssh_private_key_file: { get_attribute: [agent_key, private_key_export] }
+                       ansible_become: true
+                       ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+            unlink: {}
+
+  agent_key:
+    type: cloudify.keys.nodes.RSAKey
+    properties:
+      resource_config:
+        key_name: agent_key
+        openssh_format: true
+      use_secret_store: true
+      use_secrets_if_exist: true
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        create:
+          implementation: keys.cloudify_ssh_key.operations.create
+          inputs:
+            store_private_key_material: true
+
+capabilities:
+
+  endpoint:
+    description: The external endpoint of the application.
+    value: { get_attributes_list: [ vm, outputs, ip, value ] }
+
+  user:
+    description: user ID.
+    value: centos
+
+  key_content:
+    description: Private agent key
+    value: { get_attribute: [agent_key, private_key_export] }
+
+groups:
+
+  server_and_app:
+    members:
+    - vm
+    - ansible_playbook
+
+policies:
+
+  scale_policy:
+    type: cloudify.policies.scaling
+    properties:
+      default_instances: { get_input: vm_count }
+      min_instances: 1
+      max_instances: 3
+    targets: [server_and_app]
