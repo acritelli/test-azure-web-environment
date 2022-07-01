@@ -54,5 +54,6 @@ resource "azurerm_linux_virtual_machine" "example" {
 
   tags = {
     created-by = "cloudify"
+    owned-by = "acritelli"
   }
 }
