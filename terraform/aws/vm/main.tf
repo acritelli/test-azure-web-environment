@@ -7,11 +7,11 @@ provider "aws" {
 
 data "aws_ami" "centos" {
   most_recent = true
-  owners      = ["057448758665"]
+  owners      = ["125523088429"]
 
   filter {
     name   = "name"
-    values = ["CentOS 7.7.1908 x86_64 with cloud-init (HVM)"]
+    values = ["CentOS 7.9.2009 x86_64"]
   }
 }
 
